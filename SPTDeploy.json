@@ -109,7 +109,7 @@
   },
   "variables": {
     "vmContainerName": "vhds",
-    "availabilitySetName": "[concat(parameters('vmName'),'-availabilityset')]"
+    //"availabilitySetName": "[concat(parameters('vmName'),'-availabilityset')]"
   },
   "resources": [
     {
@@ -121,6 +121,7 @@
         "accountType": "[parameters('storageAccountType')]"
       }
     },
+    /**
     {
       "apiVersion": "2016-04-30-preview",
       "type": "Microsoft.Compute/availabilitySets",
@@ -132,6 +133,7 @@
         "managed": true
       }
     },
+    **/
     {
       "name": "[parameters('VMNicName')]",
       "type": "Microsoft.Network/networkInterfaces",
@@ -174,9 +176,11 @@
         "[resourceId('Microsoft.Network/networkInterfaces',parameters('VMNicName'))]"
       ],
       "properties": {
+        /**
         "availabilitySet": {
           "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('availabilitySetName'))]"
         },
+        **/
         "hardwareProfile": {
           "vmSize": "[parameters('vmSize')]"
         },
