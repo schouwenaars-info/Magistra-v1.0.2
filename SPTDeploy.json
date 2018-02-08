@@ -81,30 +81,19 @@
         "description": "the resource id to the subnet"
       }
     },
-
-
-    /// UITZOEKEN /// 
-    "rdpNATRuleID": {
-      "type": "string",
-      "metadata": {
-        "description": "The resource id for the RDP NAT rule"
-      }
-    },
-
     "lbBEPool": {
       "type": "string",
       "metadata": {
         "description": "The resource id for the SharePoint load balancer back end pool"
       }
     },
-    "spNicName": {
+    "VMNicName": {
       "type": "string",
       "metadata": {
         "description": "The network NIC Name"
       },
       "defaultValue": "[concat('SPNic',resourceGroup().name)]"
     }
-    //////////
   },
   "variables": {
     "vmContainerName": "vhds"
@@ -120,7 +109,7 @@
       }
     },
     {
-      "name": "[parameters('spNicName')]",
+      "name": "[parameters('VMNicName')]",
       "type": "Microsoft.Network/networkInterfaces",
       "location": "[resourceGroup().location]",
       "apiVersion": "2015-05-01-preview",
@@ -139,11 +128,6 @@
                 {
                   "id": "[parameters('lbBEPool')]"
                 }
-              ],
-              "loadBalancerInboundNatRules": [
-                {
-                  "id": "[parameters('rdpNATRuleID')]"
-                }
               ]
             }
           }
@@ -157,7 +141,7 @@
       "location": "[resourceGroup().location]",
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts',parameters('storageAccount'))]",
-        "[resourceId('Microsoft.Network/networkInterfaces',parameters('spNicName'))]"
+        "[resourceId('Microsoft.Network/networkInterfaces',parameters('VMNicName'))]"
       ],
       "properties": {
         "hardwareProfile": {
@@ -201,7 +185,7 @@
               "name": "[concat(parameters('vmName'), '0','log-1.vhd')]",
               "caching": "None",
               "createOption": "Empty",
-              "diskSizeGB": "[parameters('dataDiskSize')]",
+              "diskSizeGB": 10,
               "lun": 1
             }
           ]
@@ -209,7 +193,7 @@
         "networkProfile": {
           "networkInterfaces": [
             {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces',parameters('spNicName'))]"
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',parameters('VMNicName'))]"
             }
           ]
         }

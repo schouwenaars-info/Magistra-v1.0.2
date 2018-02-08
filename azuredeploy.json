@@ -53,14 +53,19 @@
     }
   },
   "variables": {
-    // VNET Section
+    // LB Section
     "publicIPAddressName": "RDP-PIP",
     "publicIPAddressID": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]",
     "publicLBName": "Public-LB",
     "rpdNAT": "Allow-Inbound-RDP-ADC1",
     "publicLBID": "[resourceId('Microsoft.Network/loadBalancers',variables('publicLBName'))]",
     "frontEndIPConfigID": "[concat(variables('publicLBID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
+    "backEndIPConfigID": "[concat(variables('publicLBID'),'/backendAddressPools/LoadBalancerBackEnd')]",
     "adRDPNATRuleID": "[concat(variables('publiclbID'),'/inboundNatRules/',variables('rpdNAT'))]",
+    "spSiteRule": "Allow-Inbound-WWW-SPT1",
+    "spSiteProbe": "Sharepoint-Tenant-SiteProbe",
+    "spSiteProbeID": "[concat(variables('publicLBID'),'/probes/',variables('spSiteProbe'))]",
+    // Core Network Section
     "vnetName": "Core-VNet",
     "BEnsgName": "BE-Nsg",
     "FEnsgName": "FE-Nsg",
@@ -81,7 +86,7 @@
     "ADCname": "DC-Deploy",
     "ADCipAddress": "10.0.0.41",
     "ADCVmName": "[tolower(concat(parameters('CustomerPrefix'),'-ADC-01'))]",
-    "ADCTemplURI": "[concat(variables('SubTplRepoLoc'),'ADCDeploy.json ')]", // HAVE TO BE FILLED IN
+    "ADCTemplURI": "[concat(variables('SubTplRepoLoc'),'ADCDeploy.json ')]",
     "ADCSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
     "ADCSize": "Standard_A1",
     "ADCUsage": 1, // 1 voor enabled, 0 voor disabled
@@ -90,7 +95,7 @@
     "SQLname": "SQL-Deploy",
     "SQLipAddress": "10.0.0.51",
     "SQLVmName": "[tolower(concat(parameters('CustomerPrefix'),'-SQL-01'))]",
-    "SQLTemplURI": "[concat(variables('SubTplRepoLoc'),'SQLDeploy.json ')]", // HAVE TO BE FILLED IN
+    "SQLTemplURI": "[concat(variables('SubTplRepoLoc'),'SQLDeploy.json ')]",
     "SQLSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
     "SQLSize": "Standard_A1",
     "SQLStorAcc": "[tolower(concat(parameters('CustomerPrefix'),'SASQL'))]",
@@ -100,18 +105,16 @@
     "SPTname": "SPT-Deploy",
     "SPTipAddress": "10.0.1.51",
     "SPTVmName": "[tolower(concat(parameters('CustomerPrefix'),'-SPT-01'))]",
-    "SPTTemplURI": "[concat(variables('SubTplRepoLoc'),'SPTDeploy.json ')]", // HAVE TO BE FILLED IN
+    "SPTTemplURI": "[concat(variables('SubTplRepoLoc'),'SPTDeploy.json ')]",
     "SPTSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
     "SPTSize": "Standard_A1",
     "SPTStorAcc": "[tolower(concat(parameters('CustomerPrefix'),'SASPT'))]",
     "SPTDataDiskSize": "[parameters('SPTDataDiskSize')]"
     // RDS Section
-
-
     // end variables
   },
   "resources": [
-    // VNET Deployment Section
+    // NSG Deployment Section
     {
       "name": "[variables('BEnsgName')]",
       "type": "Microsoft.Network/networkSecurityGroups",
@@ -480,6 +483,7 @@
         ]
       }
     },
+    // Public IP Section
     {
       "name": "[variables('publicIPAddressName')]",
       "type": "Microsoft.Network/publicIPAddresses",
@@ -489,6 +493,7 @@
         "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
       }
     },
+    // VNET Section
     {
       "name": "[variables('vnetName')]",
       "type": "Microsoft.Network/virtualNetworks",
@@ -536,6 +541,7 @@
         ]
       }
     },
+    // LB Section
     {
       "type": "Microsoft.Network/loadBalancers",
       "name": "[variables('publicLBName')]",
@@ -549,6 +555,42 @@
               "publicIPAddress": {
                 "id": "[variables('publicIPAddressID')]"
               }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "LoadBalancerBackEnd"
+          }
+        ],
+        "loadBalancingRules": [
+          {
+            "name": "[variables('spSiteRule')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('frontEndIPConfigID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('backEndIPConfigID')]"
+              },
+              "probe": {
+                "id": "[variables('spSiteProbeID')]"
+              },
+              "protocol": "Tcp",
+              "frontendPort": 443,
+              "backendPort": 443,
+              "idleTimeoutInMinutes": 15
+            }
+          }
+        ],
+        "probes": [
+          {
+            "name": "[variables('spSiteProbe')]",
+            "properties": {
+              "protocol": "Tcp",
+              "port": 443,
+              "intervalInSeconds": 15,
+              "numberOfProbes": 2
             }
           }
         ],
@@ -730,6 +772,9 @@
           },
           "dataDiskSize": {
             "value": "[variables('SPTDataDiskSize')]"
+          },
+          "lbBEPool": {
+            "value": "[variables('backEndIPConfigID')]"
           }
         }
       }
