@@ -93,6 +93,12 @@
         "description": "The network NIC Name"
       },
       "defaultValue": "[concat('SPNic',resourceGroup().name)]"
+    },
+    "primaryIpAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "PrimaryIPAddress if AD VM"
+      }
     }
   },
   "variables": {
@@ -120,7 +126,8 @@
           {
             "name": "ipconfig1",
             "properties": {
-              "privateIPAllocationMethod": "Dynamic",
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "[parameters('primaryIpAddress')]",
               "subnet": {
                 "id": "[parameters('subnetResourceId')]"
               },
