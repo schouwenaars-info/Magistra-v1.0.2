@@ -676,7 +676,7 @@
     {
       "name": "[variables('SQLname')]",
       "type": "Microsoft.Resources/deployments",
-      "ResourceGroup": "[concat(resourceGroup().name,'-SQL')]",
+      "ResourceGroup": "[concat(resourceGroup().name,'-APP')]",
       "apiVersion": "2017-05-10",
       "dependsOn": [
         "[variables('vnetName')]"
@@ -731,7 +731,7 @@
     {
       "name": "[variables('SPTname')]",
       "type": "Microsoft.Resources/deployments",
-      "ResourceGroup": "[concat(resourceGroup().name,'-SPT')]",
+      "ResourceGroup": "[concat(resourceGroup().name,'-APP')]",
       "apiVersion": "2017-05-10",
       "dependsOn": [
         "[variables('vnetName')]"
