@@ -99,10 +99,17 @@
       "metadata": {
         "description": "PrimaryIPAddress if AD VM"
       }
+    },
+    "RDPNATRuleID": {
+      "type": "string",
+      "metadata": {
+        "description": "the resource id of the RDP NAT rule"
+      }
     }
   },
   "variables": {
-    "vmContainerName": "vhds"
+    "vmContainerName": "vhds",
+    "availabilitySetName": "[concat(parameters('vmName'),'-availabilityset')]"
   },
   "resources": [
     {
@@ -112,6 +119,17 @@
       "location": "[resourceGroup().location]",
       "properties": {
         "accountType": "[parameters('storageAccountType')]"
+      }
+    },
+    {
+      "apiVersion": "2016-04-30-preview",
+      "type": "Microsoft.Compute/availabilitySets",
+      "name": "[variables('availabilitySetName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "platformFaultDomainCount": 2,
+        "platformUpdateDomainCount": 2,
+        "managed": true
       }
     },
     {
@@ -135,6 +153,11 @@
                 {
                   "id": "[parameters('lbBEPool')]"
                 }
+              ],
+              "loadBalancerInboundNatRules": [
+                {
+                  "id": "[parameters('RDPNATRuleID')]"
+                }
               ]
             }
           }
@@ -151,6 +174,9 @@
         "[resourceId('Microsoft.Network/networkInterfaces',parameters('VMNicName'))]"
       ],
       "properties": {
+        "availabilitySet": {
+          "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('availabilitySetName'))]"
+        },
         "hardwareProfile": {
           "vmSize": "[parameters('vmSize')]"
         },

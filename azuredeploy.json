@@ -57,11 +57,11 @@
     "publicIPAddressName": "RDP-PIP",
     "publicIPAddressID": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]",
     "publicLBName": "Public-LB",
-    "rpdNAT": "Allow-Inbound-RDP-ADC1",
+    "rpdNAT": "Allow-Inbound-RDP-SPT1",
     "publicLBID": "[resourceId('Microsoft.Network/loadBalancers',variables('publicLBName'))]",
     "frontEndIPConfigID": "[concat(variables('publicLBID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
     "backEndIPConfigID": "[concat(variables('publicLBID'),'/backendAddressPools/LoadBalancerBackEnd')]",
-    "adRDPNATRuleID": "[concat(variables('publiclbID'),'/inboundNatRules/',variables('rpdNAT'))]",
+    "RDPNATRuleID": "[concat(variables('publiclbID'),'/inboundNatRules/',variables('rpdNAT'))]",
     "spSiteRule": "Allow-Inbound-WWW-SPT1",
     "spSiteProbe": "Sharepoint-Tenant-SiteProbe",
     "spSiteProbeID": "[concat(variables('publicLBID'),'/probes/',variables('spSiteProbe'))]",
@@ -97,7 +97,7 @@
     "SQLVmName": "[tolower(concat(parameters('CustomerPrefix'),'-SQL-01'))]",
     "SQLTemplURI": "[concat(variables('SubTplRepoLoc'),'SQLDeploy.json ')]",
     "SQLSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
-    "SQLSize": "Standard_A1",
+    "SQLSize": "Standard_D1_V2",
     "SQLStorAcc": "[tolower(concat(parameters('CustomerPrefix'),'SASQL'))]",
     "SQLDataDiskSize": "[parameters('SQLDataDiskSize')]",
     "SQLLogDiskSize": "[parameters('SQLLogDiskSize')]",
@@ -107,7 +107,7 @@
     "SPTVmName": "[tolower(concat(parameters('CustomerPrefix'),'-SPT-01'))]",
     "SPTTemplURI": "[concat(variables('SubTplRepoLoc'),'SPTDeploy.json ')]",
     "SPTSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
-    "SPTSize": "Standard_A1",
+    "SPTSize": "Standard_D1_V2",
     "SPTStorAcc": "[tolower(concat(parameters('CustomerPrefix'),'SASPT'))]",
     "SPTDataDiskSize": "[parameters('SPTDataDiskSize')]"
     // RDS Section
@@ -135,6 +135,7 @@
               "direction": "Inbound"
             }
           },
+          /**
           {
             "name": "Inbound-LB-BE-TCP3389",
             "properties": {
@@ -148,6 +149,7 @@
               "direction": "Inbound"
             }
           },
+          **/
           {
             "name": "Inbound-BLOCK",
             "properties": {
@@ -288,6 +290,7 @@
               "direction": "Inbound"
             }
           },
+          /**
           {
             "name": "Inbound-LB-FE-IP",
             "properties": {
@@ -301,6 +304,7 @@
               "direction": "Inbound"
             }
           },
+          **/
           {
             "name": "Inbound-BLOCK",
             "properties": {
@@ -663,9 +667,6 @@
           "VMNicName": {
             "value": "[tolower(concat(variables('ADCVmName'),'-NIC'))]"
           },
-          "adRDPNATRuleID": {
-            "value": "[variables('adRDPNATRuleID')]"
-          },
           "dataDiskSize": {
             "value": 5
           }
@@ -775,6 +776,9 @@
           },
           "lbBEPool": {
             "value": "[variables('backEndIPConfigID')]"
+          },
+          "RDPNATRuleID": {
+            "value": "[variables('RDPNATRuleID')]"
           }
         }
       }
