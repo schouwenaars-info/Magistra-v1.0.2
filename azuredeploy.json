@@ -1,0 +1,739 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "domainName": {
+      "type": "string",
+      "metadata": {
+        "description": "The domain name"
+      },
+      "defaultValue": "test.local"
+    },
+    "CustomerPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "The domain name"
+      },
+      "defaultValue": "tst"
+    },
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Administrator of the new VMs and Domain"
+      },
+      "defaultValue": "testadmin"
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The password for the Administrator account of the new VMs and Domain"
+      },
+      "defaultValue": "[concat('Subscription#',subscription().subscriptionId)]"
+    },
+    "SQLDataDiskSize": {
+      "type": "int",
+      "metadata": {
+        "description": "The size for the SQLData disk (total amount of database data files including whitespace"
+      },
+      "defaultValue": 50
+    },
+    "SQLLogDiskSize": {
+      "type": "int",
+      "metadata": {
+        "description": "The size for the SQLData disk (total amount of database log files including whitespace"
+      },
+      "defaultValue": 15
+    },
+    "SPTDataDiskSize": {
+      "type": "int",
+      "metadata": {
+        "description": "The size for the SPTData disk (minimal 35)"
+      },
+      "defaultValue": 35
+    }
+  },
+  "variables": {
+    // VNET Section
+    "publicIPAddressName": "RDP-PIP",
+    "publicIPAddressID": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]",
+    "publicLBName": "Public-LB",
+    "rpdNAT": "Allow-Inbound-RDP-ADC1",
+    "publicLBID": "[resourceId('Microsoft.Network/loadBalancers',variables('publicLBName'))]",
+    "frontEndIPConfigID": "[concat(variables('publicLBID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
+    "adRDPNATRuleID": "[concat(variables('publiclbID'),'/inboundNatRules/',variables('rpdNAT'))]",
+    "vnetName": "Core-VNet",
+    "BEnsgName": "BE-Nsg",
+    "FEnsgName": "FE-Nsg",
+    "DMZnsgName": "DMZ-Nsg",
+    "BEnsgID": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('BEnsgName'))]",
+    "FEnsgID": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('FEnsgName'))]",
+    "DMZnsgID": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('DMZnsgName'))]",
+    "addressPrefix": "10.0.0.0/22",
+    "BESubnetName": "BackEnd-Subnet",
+    "FESubnetName": "FrontEnd-Subnet",
+    "DMZSubnetName": "Dmz-Subnet",
+    "BESubnetPrefix": "10.0.0.0/24",
+    "FESubnetPrefix": "10.0.1.0/24",
+    "DMZSubnetPrefix": "10.0.2.0/24",
+    "publicIPAddressType": "Dynamic",
+    // DC Section
+    "ADCname": "DC-Deploy",
+    "ADCipAddress": "10.0.0.41",
+    "ADCVmName": "[tolower(concat(parameters('CustomerPrefix'),'-ADC-01'))]",
+    "ADCTemplURI": "https://raw.githubusercontent.com/DennisSchouwenaars/NON-HA-ADC/master/adVmTemplate.json", // HAVE TO BE FILLED IN
+    "ADCSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
+    "ADCSize": "Standard_A1",
+    "ADCUsage": 1, // 1 voor enabled, 0 voor disabled
+    "ADCStorAcc": "[tolower(concat(parameters('CustomerPrefix'),'SAADC'))]",
+    // SQL Section
+    "SQLname": "SQL-Deploy",
+    "SQLipAddress": "10.0.0.51",
+    "SQLVmName": "[tolower(concat(parameters('CustomerPrefix'),'-SQL-01'))]",
+    "SQLTemplURI": "https://raw.githubusercontent.com/DennisSchouwenaars/NON-HA-ADC/master/adVmTemplate.json", // HAVE TO BE FILLED IN
+    "SQLSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
+    "SQLSize": "Standard_A1",
+    "SQLStorAcc": "[tolower(concat(parameters('CustomerPrefix'),'SASQL'))]",
+    "SQLDataDiskSize": "[parameters('SQLDataDiskSize')]",
+    "SQLLogDiskSize": "[parameters('SQLLogDiskSize')]",
+    // SPT Section
+    "SPTname": "SPT-Deploy",
+    "SPTipAddress": "10.0.1.51",
+    "SPTVmName": "[tolower(concat(parameters('CustomerPrefix'),'-SPT-01'))]",
+    "SPTTemplURI": "https://raw.githubusercontent.com/DennisSchouwenaars/NON-HA-ADC/master/adVmTemplate.json", // HAVE TO BE FILLED IN
+    "SPTSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
+    "SPTSize": "Standard_A1",
+    "SPTStorAcc": "[tolower(concat(parameters('CustomerPrefix'),'SASPT'))]",
+    "SPTDataDiskSize": "[parameters('SPTDataDiskSize')]"
+    // RDS Section
+
+
+    // end variables
+  },
+  "resources": [
+    // VNET Deployment Section
+    {
+      "name": "[variables('BEnsgName')]",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2015-06-15",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Inbound-FE-BE-IP",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('FESubnetPrefix')]",
+              "destinationAddressPrefix": "[variables('BESubnetPrefix')]",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Inbound-LB-BE-TCP3389",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "[variables('BESubnetPrefix')]",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Inbound-BLOCK",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('BESubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Deny",
+              "priority": 200,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Outbound-BE-FE-IP",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('BESubnetPrefix')]",
+              "destinationAddressPrefix": "[variables('FESubnetPrefix')]",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "Outbound-BE-DMZ-IP",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('BESubnetPrefix')]",
+              "destinationAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "Outbound-BE-INET-TCP80",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "80",
+              "sourceAddressPrefix": "[variables('BESubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Allow",
+              "priority": 120,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "Outbound-BE-INET-TCP443",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('BESubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Allow",
+              "priority": 130,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "Outbound-BE-INET-BLOCK",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('BESubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Deny",
+              "priority": 200,
+              "direction": "Outbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('FEnsgName')]",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2015-06-15",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Inbound-BE-FE-IP",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('BESubnetPrefix')]",
+              "destinationAddressPrefix": "[variables('FESubnetPrefix')]",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Inbound-DMZ-FE-TCP80",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "80",
+              "sourceAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "destinationAddressPrefix": "[variables('FESubnetPrefix')]",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Inbound-DMZ-FE-TCP443",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "destinationAddressPrefix": "[variables('FESubnetPrefix')]",
+              "access": "Allow",
+              "priority": 120,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Inbound-DMZ-FE-TCP3389",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "destinationAddressPrefix": "[variables('FESubnetPrefix')]",
+              "access": "Allow",
+              "priority": 130,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Inbound-LB-FE-IP",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "Internet",
+              "sourceAddressPrefix": "AzureLoadBalancer",
+              "destinationAddressPrefix": "[variables('FESubnetPrefix')]",
+              "access": "Allow",
+              "priority": 140,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Inbound-BLOCK",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('FESubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Deny",
+              "priority": 200,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Outbound-FE-BE-IP",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('FESubnetPrefix')]",
+              "destinationAddressPrefix": "[variables('BESubnetPrefix')]",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "Outbound-FE-INET-TCP80",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "80",
+              "sourceAddressPrefix": "[variables('FESubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "Outbound-FE-INET-TCP443",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('FESubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Allow",
+              "priority": 120,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "Outbound-FE-INET-BLOCK",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('FESubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Deny",
+              "priority": 200,
+              "direction": "Outbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('DMZnsgName')]",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2015-06-15",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Inbound-LB-DMZ-IP",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Inbound-VN-DMZ-TCP80",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "80",
+              "sourceAddressPrefix": "VIRTUALNETWORK",
+              "destinationAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Inbound-VN-DMZ-TCP443",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "VIRTUALNETWORK",
+              "destinationAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "access": "Allow",
+              "priority": 120,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Inbound-BLOCK",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Deny",
+              "priority": 200,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Outbound-DMZ-FE-TCP3389",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "destinationAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "Outbound-DMZ-INET-TCP80",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "80",
+              "sourceAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "Outbound-DMZ-INET-TCP443",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "destinationAddressPrefix": "Internet",
+              "access": "Allow",
+              "priority": 120,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "Outbound-DMZ-BLOCK",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('DMZSubnetPrefix')]",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 200,
+              "direction": "Outbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('publicIPAddressName')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2015-06-15",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
+      }
+    },
+    {
+      "name": "[variables('vnetName')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2015-06-15",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkSecurityGroups/', variables('BEnsgName'))]",
+        "[concat('Microsoft.Network/networkSecurityGroups/', variables('FEnsgName'))]",
+        "[concat('Microsoft.Network/networkSecurityGroups/', variables('DMZnsgName'))]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('addressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('BESubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('BESubnetPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[variables('BEnsgID')]"
+              }
+            }
+          },
+          {
+            "name": "[variables('FESubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('FESubnetPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[variables('FEnsgID')]"
+              }
+            }
+          },
+          {
+            "name": "[variables('DMZSubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('DMZSubnetPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[variables('DMZnsgID')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/loadBalancers",
+      "name": "[variables('publicLBName')]",
+      "apiVersion": "2015-06-15",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "LoadBalancerFrontEnd",
+            "properties": {
+              "publicIPAddress": {
+                "id": "[variables('publicIPAddressID')]"
+              }
+            }
+          }
+        ],
+        "inboundNatRules": [
+          {
+            "name": "[variables('rpdNAT')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('frontEndIPConfigID')]"
+              },
+              "protocol": "tcp",
+              "frontendPort": 50001,
+              "backendPort": 3389,
+              "enableFloatingIP": false
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]"
+      ]
+    },
+    // DC VM Deployment Section
+    {
+      "name": "[variables('ADCname')]",
+      "type": "Microsoft.Resources/deployments",
+      "ResourceGroup": "[concat(resourceGroup().name,'-ADC')]",
+      "apiVersion": "2017-05-10",
+      "copy": {
+        "name": "EnableDomain",
+        "count": "[variables('ADCUsage')]"
+      },
+      "dependsOn": [
+        "[variables('vnetName')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[variables('ADCTemplURI')]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "VmName": {
+            "value": "[tolower(variables('ADCVmName'))]"
+          },
+          "windowsImageSKU": {
+            "value": "[variables('ADCSku')]"
+          },
+          "vmSize": {
+            "value": "[variables('ADCSize')]"
+          },
+          /**"domainName": {
+            "value": "[parameters('domainName')]"
+          },**/
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('adminPassword')]"
+          },
+          "primaryIpAddress": {
+            "value": "[variables('ADCipAddress')]"
+          },
+          "subnetResourceID": {
+            "value": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')),'/subnets/', variables('BESubnetName'))]"
+          },
+          "storageAccount": {
+            "value": "[tolower(variables('ADCStorAcc'))]"
+          },
+          "VMNicName": {
+            "value": "[tolower(concat(variables('ADCVmName'),'-NIC'))]"
+          },
+          "adRDPNATRuleID": {
+            "value": "[variables('adRDPNATRuleID')]"
+          },
+          "dataDiskSize": {
+            "value": 5
+          }
+        }
+      }
+    },
+    // SQL VM Deployment Section
+    {
+      "name": "[variables('SQLname')]",
+      "type": "Microsoft.Resources/deployments",
+      "ResourceGroup": "[concat(resourceGroup().name,'-SQL')]",
+      "apiVersion": "2017-05-10",
+      "dependsOn": [
+        "[variables('vnetName')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[variables('SQLTemplURI')]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "VmName": {
+            "value": "[tolower(variables('SQLVmName'))]"
+          },
+          "windowsImageSKU": {
+            "value": "[variables('SQLSku')]"
+          },
+          "vmSize": {
+            "value": "[variables('SQLSize')]"
+          },
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('adminPassword')]"
+          },
+          "primaryIpAddress": {
+            "value": "[variables('SQLipAddress')]"
+          },
+          "subnetResourceID": {
+            "value": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')),'/subnets/', variables('BESubnetName'))]"
+          },
+          "storageAccount": {
+            "value": "[tolower(variables('SQLStorAcc'))]"
+          },
+          "VMNicName": {
+            "value": "[tolower(concat(variables('SQLVmName'),'-NIC'))]"
+          },
+          "dataDiskSize": {
+            "value": 15
+          },
+          "SQLDataDiskSize": {
+            "value": "[variables('SQLDataDiskSize')]"
+          },
+          "SQLLOGDiskSize": {
+            "value": "[variables('SQLLogDiskSize')]"
+          }
+        }
+      }
+    },
+    // SPT VM Deployment Section
+    {
+      "name": "[variables('SPTname')]",
+      "type": "Microsoft.Resources/deployments",
+      "ResourceGroup": "[concat(resourceGroup().name,'-SPT')]",
+      "apiVersion": "2017-05-10",
+      "dependsOn": [
+        "[variables('vnetName')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[variables('SPTTemplURI')]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "VmName": {
+            "value": "[tolower(variables('SPTVmName'))]"
+          },
+          "windowsImageSKU": {
+            "value": "[variables('SPTSku')]"
+          },
+          "vmSize": {
+            "value": "[variables('SPTSize')]"
+          },
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('adminPassword')]"
+          },
+          "primaryIpAddress": {
+            "value": "[variables('SPTipAddress')]"
+          },
+          "subnetResourceID": {
+            "value": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')),'/subnets/', variables('FESubnetName'))]"
+          },
+          "storageAccount": {
+            "value": "[tolower(variables('SPTStorAcc'))]"
+          },
+          "VMNicName": {
+            "value": "[tolower(concat(variables('SPTVmName'),'-NIC'))]"
+          },
+          "dataDiskSize": {
+            "value": "[variables('SPTDataDiskSize')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+  }
+}
