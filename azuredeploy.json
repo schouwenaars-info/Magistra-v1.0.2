@@ -76,11 +76,12 @@
     "FESubnetPrefix": "10.0.1.0/24",
     "DMZSubnetPrefix": "10.0.2.0/24",
     "publicIPAddressType": "Dynamic",
+    "SubTplRepoLoc": "https://raw.githubusercontent.com/schouwenaars-info/Magistra-v1.0.2/master/",
     // DC Section
     "ADCname": "DC-Deploy",
     "ADCipAddress": "10.0.0.41",
     "ADCVmName": "[tolower(concat(parameters('CustomerPrefix'),'-ADC-01'))]",
-    "ADCTemplURI": "https://raw.githubusercontent.com/DennisSchouwenaars/NON-HA-ADC/master/adVmTemplate.json", // HAVE TO BE FILLED IN
+    "ADCTemplURI": "[concat(variables('SubTplRepoLoc'),'ADCDeploy.json ')]", // HAVE TO BE FILLED IN
     "ADCSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
     "ADCSize": "Standard_A1",
     "ADCUsage": 1, // 1 voor enabled, 0 voor disabled
@@ -89,7 +90,7 @@
     "SQLname": "SQL-Deploy",
     "SQLipAddress": "10.0.0.51",
     "SQLVmName": "[tolower(concat(parameters('CustomerPrefix'),'-SQL-01'))]",
-    "SQLTemplURI": "https://raw.githubusercontent.com/DennisSchouwenaars/NON-HA-ADC/master/adVmTemplate.json", // HAVE TO BE FILLED IN
+    "SQLTemplURI": "[concat(variables('SubTplRepoLoc'),'SQLDeploy.json ')]", // HAVE TO BE FILLED IN
     "SQLSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
     "SQLSize": "Standard_A1",
     "SQLStorAcc": "[tolower(concat(parameters('CustomerPrefix'),'SASQL'))]",
@@ -99,7 +100,7 @@
     "SPTname": "SPT-Deploy",
     "SPTipAddress": "10.0.1.51",
     "SPTVmName": "[tolower(concat(parameters('CustomerPrefix'),'-SPT-01'))]",
-    "SPTTemplURI": "https://raw.githubusercontent.com/DennisSchouwenaars/NON-HA-ADC/master/adVmTemplate.json", // HAVE TO BE FILLED IN
+    "SPTTemplURI": "[concat(variables('SubTplRepoLoc'),'SPTDeploy.json ')]", // HAVE TO BE FILLED IN
     "SPTSku": "2016-Datacenter", //of 2016-Datacenter,2012-R2-Datacenter
     "SPTSize": "Standard_A1",
     "SPTStorAcc": "[tolower(concat(parameters('CustomerPrefix'),'SASPT'))]",
